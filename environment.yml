@@ -1,0 +1,30 @@
+# Shared training environment — Track A (model).
+# One definition for everyone on the DGX-H200, so "works on my session" isn't a recurring problem.
+#
+# Usage:
+#   conda env create -f environment.yml
+#   conda activate milan
+#   bash model/setup/install_torch.sh      # torch is installed separately — see that script for why
+#   python model/setup/verify_gpu.py       # confirms the GPU is actually visible before you train anything
+
+name: milan
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - numpy
+  - pandas
+  - tqdm
+  - pyyaml
+  - matplotlib
+  - jupyterlab        # optional — only needed if the lab's access model is JupyterHub-based, harmless otherwise
+  - pip:
+      - mediapipe
+      - onnx
+      - onnxruntime-gpu
+      - onnxsim
+      - transformers
+      - accelerate
+      - tensorboard
+      - einops
