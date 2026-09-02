@@ -1,97 +1,56 @@
 # Local Setup & Connecting to the DGX-H200
 
-Target location in the repo: `model/setup/local_setup.md`. Written for a first-time remote-GPU user — if you've never SSH'd into a shared machine before, start here. `dgx_access.md` (same folder) is the reference once you're comfortable; this is the walkthrough.
+Target location in the repo: `model/setup/local_setup.md`.
+
+Everyone on the team gets their own IP, username, and password from the BMU AI Lab admins — same format, different values:
+
+```
+IP Address: 10.1.0.176
+Username:   dgx-s-bmu-cse-enrollment
+Password:   your-own-password
+```
+
+Fill in your own values wherever `<ip>` / `<username>` appear below.
 
 ---
 
-## 0. What you need installed locally
+## 1. What you need installed locally
 
-- **Git** — to clone the repo.
-- **An SSH client** — already built into macOS and Linux terminals. On Windows, use the OpenSSH client bundled with recent Windows (available from PowerShell/Terminal), or WSL if you already use it.
-- **Python 3.11** and **conda** (Miniconda is enough — you don't need the full Anaconda distribution) — [miniconda install](https://docs.conda.io/projects/miniconda/en/latest/).
-- **(Optional, recommended) VS Code** with the **Remote - SSH** extension — lets you browse/edit files on the DGX as if they were local, instead of editing over a bare terminal.
+- **Git**
+- **An SSH client** — built into macOS/Linux terminals already. On Windows, use the OpenSSH client (PowerShell/Terminal) or WSL.
+- **(Optional) VS Code + the Remote - SSH extension** — lets you edit files on the DGX directly instead of a bare terminal. Worth it if you'll be writing/debugging code on the box.
 
-You do **not** need a GPU on your own laptop for anything in this project — all training happens on the DGX. Your laptop's job is: write code, push it to GitHub, and drive the DGX over SSH.
+Nothing else is required locally — no CUDA, no conda, no GPU. All training happens on the DGX; your machine just drives it over SSH.
 
-## 1. Clone the repo
-
-```bash
-git clone <repo-url>
-cd milan
-```
-
-## 2. Local Python environment (for local scripts/tools only — not training)
-
-This is a **separate, lightweight environment from the DGX's** — use it for things you run on your own machine, like testing the extension's build tooling or a small local script. It is not where model training happens.
+## 2. Connect
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -r requirements-local.txt   # if/when this file exists — otherwise install per-task as needed
+ssh <username>@<ip>
 ```
 
-If you're not sure whether something needs the DGX environment (`environment.yml`, §3 of `dgx_access.md`) or this local one: **if it touches the GPU, trains a model, or processes the full datasets, it's DGX. If it's a quick script, a linter, or extension tooling, it's local.**
+You'll be prompted for your password each time (this is normal for password auth — there's no key involved). Type it and hit enter; nothing will appear on screen as you type, that's expected.
 
-## 3. Generate an SSH key (if you don't already have one)
-
-Check first — you might already have one:
-
-```bash
-ls ~/.ssh
-```
-
-If you see `id_ed25519` / `id_ed25519.pub` (or `id_rsa` / `id_rsa.pub`), you're set — skip to step 4. Otherwise:
-
-```bash
-ssh-keygen -t ed25519 -C "your-email@example.com"
-```
-
-Press Enter through the prompts (default file location is fine; a passphrase is optional but recommended). This creates two files: `~/.ssh/id_ed25519` (**private** — never share this, never commit it) and `~/.ssh/id_ed25519.pub` (**public** — this is the one you send to the lab admins).
-
-Send the **public** key to the BMU AI Lab admins for account access:
-
-```bash
-cat ~/.ssh/id_ed25519.pub
-```
-
-Copy the output and send it to them however they've asked for it (email, form, etc.).
-
-## 4. Set up an SSH shortcut
-
-Once the admins confirm your account is set up and give you the host address and username, add this to `~/.ssh/config` (create the file if it doesn't exist):
+**Save yourself retyping the full command** — add this to `~/.ssh/config` (create the file if it doesn't exist):
 
 ```
 Host milan-dgx
-    HostName <dgx-host-they-gave-you>
-    User <your-username>
-    IdentityFile ~/.ssh/id_ed25519
+    HostName <ip>
+    User <username>
 ```
 
-Now, instead of typing the full `ssh username@host` every time, you can just run:
+Now `ssh milan-dgx` works, and it'll still prompt for your password.
 
-```bash
-ssh milan-dgx
-```
+**First connection** will show `The authenticity of host '...' can't be established. Are you sure you want to continue connecting?` — type `yes`. Only happens once per machine.
 
-## 5. First connection — what to expect
-
-```bash
-ssh milan-dgx
-```
-
-- First time connecting to any new host, you'll see a prompt like `The authenticity of host '...' can't be established. Are you sure you want to continue connecting?` — type `yes`. This is normal and only happens once per machine.
-- If it asks for a passphrase, that's the one you set on your key in step 3 (not your account password).
-- If you land at a shell prompt on the DGX, you're in.
-
-**Common first-time errors:**
+**If it doesn't connect:**
 
 | Error | Likely cause |
 |---|---|
-| `Permission denied (publickey)` | Your public key hasn't been added on the lab's side yet, or you pointed `IdentityFile` at the wrong file — double check step 3/4 |
-| `Connection refused` / `Connection timed out` | Wrong host address, or you need to be on a specific network/VPN — check with the admins |
-| `Host key verification failed` | Rare, usually means the machine's identity changed — don't just bypass this, ask the admins first |
+| `Connection refused` / timed out | Wrong IP, or you need to be on a specific network/VPN — check with admins |
+| `Permission denied` | Wrong username/password — re-check what you were given |
+| Connects but `nvidia-smi` fails (next step) | Ask the admins before doing anything else |
 
-## 6. Confirm you can see the GPU
+## 3. Confirm the GPU is visible
 
 Once connected:
 
@@ -99,34 +58,67 @@ Once connected:
 nvidia-smi
 ```
 
-This should print a table listing the H200(s) and their current usage. If this fails or shows nothing, stop here and check with the admins before doing anything else — don't proceed to environment setup on a session that can't see a GPU.
+Should print a table with the H200(s). If not, stop here and check with the admins.
 
-## 7. Set up the shared environment and verify
+## 4. Check for required software on the DGX — install if missing
 
-Follow `dgx_access.md` §3 from here — clone the repo *on the DGX* (yes, separately from your local clone in step 1), create the `milan` conda environment, and run `verify_gpu.py`. That script's `PASS` output is the real confirmation everything works end to end.
-
-## 8. Working without losing your session — tmux, quickly
-
-You'll run real training jobs inside `tmux` so a dropped connection doesn't kill them. The four commands you actually need day to day:
+The box is shared, so tools may or may not already be set up. Check each, and install what's missing:
 
 ```bash
-tmux new -s <name>       # start a new named session
-# Ctrl+b, then d         # detach — leaves it running in the background
-tmux attach -t <name>    # reattach from a fresh SSH login
-tmux ls                  # list your running sessions
+which git tmux conda unzip jq curl
 ```
 
-Full session-naming and coordination conventions (so you don't collide with a teammate) are in `dgx_access.md` §2 and §5.
+- **`conda` missing** → install Miniconda:
+  ```bash
+  wget https://repo.anaconda.com/miniconda3/Miniconda3-latest-Linux-x86_64.sh
+  bash Miniconda3-latest-Linux-x86_64.sh
+  # follow the prompts, then restart your shell (or `source ~/.bashrc`)
+  ```
+- **`git`, `tmux`, `unzip`, `jq`, `curl` missing** → if you have `sudo`:
+  ```bash
+  sudo apt-get update && sudo apt-get install -y git tmux unzip jq curl
+  ```
+  If you don't have `sudo` on a shared lab machine, ask the admins to install them once for everyone rather than everyone hitting the same wall separately.
 
-## 9. Where things live
+`jq` and `unzip` specifically are only needed for `model/data/download_include.sh` — skip installing them if you're not the one downloading the dataset.
 
-- **`RUNS.md`** — repo root (`milan/RUNS.md`), not inside `model/`. It's shared across the whole team and logs every DGX training run, so it lives somewhere everyone sees it immediately, not buried in a subfolder. Log your run there *before* you start it.
-- **This file and `dgx_access.md`** — `model/setup/`, since they're specifically about the model-training track's infrastructure.
+## 5. Clone the repo and set up the environment — on the DGX
 
-## 10. Checklist — you're ready when
+```bash
+git clone <repo-url> ~/milan
+cd ~/milan
+conda env create -f environment.yml
+conda activate milan
+bash model/setup/install_torch.sh
+python model/setup/verify_gpu.py
+```
 
-- [ ] `ssh milan-dgx` connects without errors
-- [ ] `nvidia-smi` on the DGX shows the GPU(s)
-- [ ] `conda activate milan` works on the DGX
+`verify_gpu.py` printing `PASS` is the real confirmation everything works end to end.
+
+## 6. tmux — don't run anything long outside of it
+
+A dropped SSH connection kills whatever's running in that session. Always wrap training/long jobs:
+
+```bash
+tmux new -s <name>       # start, named after what you're doing
+# Ctrl+b, then d         # detach — keeps running in the background
+tmux attach -t <name>    # reattach later
+tmux ls                  # see your running sessions
+```
+
+Full coordination conventions (so you don't collide with a teammate on the same GPU) are in `dgx_access.md` §2 and §5.
+
+## 7. Where things live
+
+- **`RUNS.md`** — repo root, not inside `model/`. Log your run there *before* you start it, shared across the whole team.
+- **The dataset itself** — not in the repo. Downloaded separately on the DGX, in a directory outside your git clone (e.g. `~/milan-data/`) — see `model/data/download_include.sh` and the note in that script.
+- **This file + `dgx_access.md`** — `model/setup/`.
+
+## 8. Checklist — you're ready when
+
+- [ ] `ssh milan-dgx` connects (password prompt, then a shell)
+- [ ] `nvidia-smi` shows the GPU(s)
+- [ ] `git`, `tmux`, `conda`, `unzip`, `jq`, `curl` all present (or installed)
+- [ ] `conda activate milan` works
 - [ ] `python model/setup/verify_gpu.py` prints `PASS`
-- [ ] You know where `RUNS.md` is and what to write in it before starting a run
+- [ ] You know where `RUNS.md` and the dataset directory are
