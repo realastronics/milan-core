@@ -7,23 +7,24 @@ Target location in the repo: `model/setup/dgx_access.md`. This is the reference 
 ## 1. First login
 
 ```bash
-ssh <your-username>@<dgx-host>
+ssh <your-username>@<your-ip>
 ```
 
-Get `<dgx-host>` and your credentials/SSH key from the BMU AI Lab admins — this isn't something to guess at or share in the repo. If they issue an SSH key rather than a password, add it to your local `~/.ssh/config` so you don't retype the path every time:
+Each teammate gets their own IP, username, and password from the BMU AI Lab admins (see `local_setup.md` for the exact format and a walkthrough if this is your first time). This is **password auth, not a key** — you'll be prompted for your password on every connection, which is normal.
+
+Save yourself retyping the full command by adding this to `~/.ssh/config`:
 
 ```
 Host milan-dgx
-    HostName <dgx-host>
+    HostName <your-ip>
     User <your-username>
-    IdentityFile ~/.ssh/<your-key>
 ```
 
-Then just `ssh milan-dgx`.
+Then just `ssh milan-dgx` (still password-prompted each time).
 
-**Ask the admins these two things explicitly, don't assume:**
-1. Is GPU access open (any user, any GPU, any time) or scheduled (Slurm `srun`/`sbatch`)? This changes step 4 below.
-2. Is there a shared, fast-storage directory for datasets, or does each user get their own quota? This changes where INCLUDE/iSign get downloaded to (§4).
+**Worth confirming with the admins, since it affects the rest of this doc:**
+1. Is GPU access shared/open across the team's accounts, or does each person's login get their own allocation? (Individual usernames per teammate suggest the latter, but confirm rather than assume — it changes how much §5 coordination actually matters.)
+2. Is there a shared, fast-storage directory for datasets, or does each user get their own quota? This changes where INCLUDE gets downloaded to (§4).
 
 ## 2. Persistent sessions — always use tmux
 
@@ -58,14 +59,14 @@ If `verify_gpu.py` prints `PASS`, you're done — see `environment.yml` and `mod
 
 ## 4. Data storage
 
-Do **not** let every team member download INCLUDE (56GB) and iSign (~200GB) into their own home directory — confirm a shared dataset path with the admins (e.g. `/data/milan/` or similar) and point `model/data/download_include.sh` / `download_isign.sh` at it. One shared, read-only-mounted copy for everyone's training jobs.
+Do **not** let every team member download INCLUDE (~60GB) into their own home directory — confirm a shared dataset path with the admins, or agree on one as a team (e.g. `~/milan-data/` per user if there's no shared volume, or a single `/data/milan/` if there is). Point `model/data/download_include.sh` at whichever it is. One copy per storage location, not one per person. (iSign is not in scope yet — this phase is INCLUDE-only, see `docs/technical-spec.md`.)
 
 ## 5. Multi-user coordination
 
 A shared DGX with no coordination is how two people collide on the same GPU and both lose a run. Before starting anything that will run for a while:
 
 1. Check `RUNS.md` in the repo root — log what you're about to run, which GPU, and roughly how long, *before* you start it.
-2. If GPU access is Slurm-scheduled (§1), this is partly handled for you — but still log it, since Slurm won't tell your teammates what's queued.
+2. If GPU access turned out to be shared/open (confirmed per §1), logging here is what actually prevents a collision — nothing else will.
 3. Update `RUNS.md` again when the run finishes (or fails) — include the result, not just the start.
 
 ## 6. Multi-GPU — only when you actually need it
@@ -82,4 +83,4 @@ rsync -avz --progress ./some_dir/ milan-dgx:~/milan/some_dir/
 rsync -avz --progress milan-dgx:~/milan/model/export/output.onnx ./
 ```
 
-Prefer `rsync -avz` over `scp` for anything more than a single small file — it resumes on interruption, `scp` doesn't.
+Both will prompt for your password (no key involved, same as `ssh`). Prefer `rsync -avz` over `scp` for anything more than a single small file — it resumes on interruption, `scp` doesn't.
